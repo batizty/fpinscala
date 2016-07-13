@@ -2,7 +2,6 @@ package fpinscala.state
 
 import scala.collection.mutable.ListBuffer
 
-
 trait RNG {
   def nextInt: (Int, RNG) // Should generate a random `Int`. We'll later define other functions in terms of `nextInt`.
 }
@@ -117,12 +116,89 @@ object RNG {
     }
   }
 
+  /**
+    * 6.5
+    */
+  def doubleRand: Rand[Double] =  {
+    rng => {
+      val (i, r) = rng.nextInt
+      ( i.toDouble / (Int.MaxValue + 1), r)
+    }
+  }
 
-  def map2[A,B,C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] = ???
+  def doubleRand2: Rand[Double] = {
+    map(nonNegativeInt)(d => d.toDouble / (Int.MaxValue + 1))
+  }
 
-  def sequence[A](fs: List[Rand[A]]): Rand[List[A]] = ???
 
-  def flatMap[A,B](f: Rand[A])(g: A => Rand[B]): Rand[B] = ???
+  def map2[A,B,C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] = {
+    rng => {
+      val (aa, r0) = ra(rng)
+      val (bb, r1) = rb(r0)
+      (f(aa, bb), r1)
+    }
+  }
+
+  /**
+    * 6.7
+    * @param fs
+    * @tparam A
+    * @return
+    */
+  def sequence[A](fs: List[Rand[A]]): Rand[List[A]] = {
+    fs.foldRight(unit(List[A]()))((rand, b) => map2(rand, b)((aa, bb) => (aa :: bb)))
+  }
+
+  def ints4(count: Int): Rand[List[Int]] = {
+    sequence(List.fill(count)(int))
+  }
+
+  /**
+    * 6.8
+    * @param f
+    * @param g
+    * @tparam A
+    * @tparam B
+    * @return
+    */
+  def flatMap[A,B](f: Rand[A])(g: A => Rand[B]): Rand[B] = {
+    rng => {
+      val (a, rng2) = f(rng)
+      g(a)(rng2)
+    }
+  }
+
+  /**
+    * 6.9
+    * @param s
+    * @param f
+    * @tparam A
+    * @tparam B
+    * @return
+    */
+  def mapViaFlatMap[A, B](s: Rand[A])(f: A => B): Rand[B] = {
+   flatMap[A, B](s) { a => rng => (f(a), rng) }
+  }
+
+  def mapViaFlatMap2[A, B](s: Rand[A])(f: A => B): Rand[B] = {
+    flatMap(s)(a => unit(f(a)))
+  }
+
+  def map2ViaFlatMap[A,B,C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] = {
+    flatMap(ra) { aa =>
+      flatMap(rb) { bb =>
+        unit(f(aa, bb))
+      }
+    }
+  }
+
+  def map2ViaFlatMap2[A,B,C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] = {
+    flatMap(ra) { aa =>
+      map(rb) { bb => f(aa, bb)
+      }
+    }
+  }
+
 }
 
 case class State[S,+A](run: S => (A, S)) {
