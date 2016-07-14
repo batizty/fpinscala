@@ -202,12 +202,51 @@ object RNG {
 }
 
 case class State[S,+A](run: S => (A, S)) {
-  def map[B](f: A => B): State[S, B] =
-    sys.error("todo")
-  def map2[B,C](sb: State[S, B])(f: (A, B) => C): State[S, C] =
-    sys.error("todo")
-  def flatMap[B](f: A => State[S, B]): State[S, B] =
-    sys.error("todo")
+  def map1[S, A, B](a: S => (A, S))(f: A => B):S => (B, S) = {
+    s => {
+      val (x, s1) = a(s)
+      (f(x), s1)
+    }
+  }
+
+  def map[B](f: A => B): State[S, B] = {
+    State( {
+      s => {
+        val (a, s1) = run(s)
+        (f(a), s1)
+      }
+    })
+  }
+  def map_2[B](f: A => B): State[S, B] = {
+    flatMap(a => State(s => (f(a), s)))
+  }
+
+  def map2[B,C](sb: State[S, B])(f: (A, B) => C): State[S, C] = {
+    State(s => {
+      val (aa, s0) = run(s)
+      val (bb, s1) = sb.run(s0)
+      (f(aa, bb), s1)
+    })
+  }
+  def map_2[B,C](sb: State[S, B])(f: (A, B) => C): State[S, C] = {
+    flatMap(a => sb.map(b => f(a, b)))
+  }
+  def flatMap[B](f: A => State[S, B]): State[S, B] = {
+    State(s => {
+      val (a, s0) = run(s)
+      f(a).run(s0)
+    })
+  }
+
+  def unit[A](a: A): State[S, A] =
+    State(s => (a, s))
+
+  def sequence[A](fs: List[State[A, S]]): State[List[A], S] = {
+    fs.foldLeft(unit(List[A]()))((b, s) => map2(s)())
+  }
+//  def sequence[A](fs: List[Rand[A]]): Rand[List[A]] = {
+//    fs.foldRight(unit(List[A]()))((rand, b) => map2(rand, b)((aa, bb) => (aa :: bb)))
+//  }
 }
 
 sealed trait Input
