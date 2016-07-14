@@ -238,15 +238,20 @@ case class State[S,+A](run: S => (A, S)) {
     })
   }
 
-  def unit[A](a: A): State[S, A] =
+  def unit[S, A](a: A): State[S, A] =
     State(s => (a, s))
 
-  def sequence[A](fs: List[State[A, S]]): State[List[A], S] = {
-    fs.foldLeft(unit(List[A]()))((b, s) => map2(s)())
+  def sequence[S, A](sas: List[State[S, A]]): State[S, List[A]] = {
+    def go(s: S, actions: List[State[S,A]], acc: List[A]): (List[A],S) =
+      actions match {
+        case Nil => (acc.reverse,s)
+        case h :: t => h.run(s) match { case (a,s2) => go(s2, t, a :: acc) }
+      }
+    State((s: S) => go(s,sas,List()))
   }
-//  def sequence[A](fs: List[Rand[A]]): Rand[List[A]] = {
-//    fs.foldRight(unit(List[A]()))((rand, b) => map2(rand, b)((aa, bb) => (aa :: bb)))
-//  }
+
+  def sequenceViaFoldRight[S,A](sas: List[State[S, A]]): State[S, List[A]] =
+    sas.foldRight(unit[S, List[A]](List()))((sl, s) => sl.map2(s)(_ :: _))
 }
 
 sealed trait Input
