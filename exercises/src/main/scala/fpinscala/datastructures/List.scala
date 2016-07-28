@@ -195,4 +195,67 @@ object List { // `List` companion object. Contains functions for creating and wo
   def map[A,B](l: List[A])(f: A => B): List[B] = {
     foldRight(l, List[B]())((h, t) => Cons(f(h), t))
   }
+
+  // 3.19
+  def filter[A](as: List[A])(f: A => Boolean): List[A] = {
+    import collection.mutable.ListBuffer
+    val buff = new ListBuffer[A]
+    def go(l: List[A]): List[A] = {
+      l match {
+        case Nil => List(buff.toList: _*)
+        case Cons(h, t) =>
+          if (f(h)) buff += h
+          go(t)
+      }
+    }
+    go(as)
+  }
+
+  def filter_1[A](as: List[A])(f: A => Boolean): List[A] = {
+    foldRight(as, List[A]())((h, t) => if (f(h)) Cons(h, t) else t)
+  }
+
+  def filter_2[A](as: List[A])(f: A => Boolean): List[A] = {
+    reverseList(foldLeft(as, List[A]())((t, h) => if (f(h)) Cons(h, t) else t))
+  }
+
+  // 3.20
+  def flatMap[A, B](as: List[A])(f: A => List[B]): List[B] = {
+    concat(map(as)(f))
+  }
+
+  // 3.21
+  def filterViaFlatMap[A](l: List[A])(f: A => Boolean): List[A] = {
+    flatMap(l)(a => if (f(a)) List(a) else List[A]())
+  }
+
+  // 3.22
+  def addPairwise(a: List[Int], b: List[Int]): List[Int] = (a,b) match {
+    case (Nil, _) => Nil
+    case (_, Nil) => Nil
+    case (Cons(h1, t1), Cons(h2, t2)) => Cons((h1 + h2), addPairwise(t1, t2))
+  }
+
+  // 3.23
+  def zipWith[A,B,C](a: List[A], b: List[B])(f: (A,B) => C): List[C] = (a,b) match {
+    case (Nil, _) => Nil
+    case (_, Nil) => Nil
+    case (Cons(h1, t1), Cons(h2, t2)) => Cons(f(h1, h2), zipWith(t1, t2)(f))
+  }
+
+  // 3.24
+  def hasSubsequence[A](sup: List[A], sub: List[A]): Boolean = {
+    sup match {
+      case Nil => sub == Nil
+      case _ if startWith(sup, sub) => true
+      case Cons(h, t) => hasSubsequence(t, sub)
+    }
+  }
+
+  def startWith[A](l: List[A], prefix: List[A]): Boolean =
+    (l, prefix)  match {
+      case (_, Nil) => true
+      case (Cons(h1, t1), Cons(h2, t2)) if (h1 == h2) => startWith(t1, t2)
+      case _ => false
+    }
 }
