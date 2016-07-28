@@ -10,7 +10,7 @@ object Tree {
   // 3.25
   def size[A](t: Tree[A]): Int = {
     t match {
-      case Leaf => 1
+      case Leaf(_) => 1
       case Branch(l, r) => size(l) + size(r) + 1
     }
   }
@@ -49,7 +49,7 @@ object Tree {
     fold(t)(x => x)(_ max _)
   }
 
-  def depth[A](t: Tree[A]): Int = {
+  def depth2[A](t: Tree[A]): Int = {
     fold(t)(a => 1)((dl, dr) => 1 + (dl max dr))
   }
 
