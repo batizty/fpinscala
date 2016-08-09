@@ -4,8 +4,10 @@ import java.util.concurrent._
 import language.implicitConversions
 
 object Par {
+  // 加上状态和超时的属性给Par，实际上这里的Par应该就是Java中的Future，虽然和Scala的Future会有不同的意义，但是大体意思是相同的
   type Par[A] = ExecutorService => Future[A]
-  
+
+  // run这里的ExecutorService可以默认参数确定的
   def run[A](s: ExecutorService)(a: Par[A]): Future[A] = a(s)
 
   def unit[A](a: A): Par[A] = (es: ExecutorService) => UnitFuture(a) // `unit` is represented as a function that returns a `UnitFuture`, which is a simple implementation of `Future` that just wraps a constant value. It doesn't use the `ExecutorService` at all. It's always done and can't be cancelled. Its `get` method simply returns the value that we gave it.
@@ -23,16 +25,53 @@ object Par {
       val bf = b(es)
       UnitFuture(f(af.get, bf.get)) // This implementation of `map2` does _not_ respect timeouts, and eagerly waits for the returned futures. This means that even if you have passed in "forked" arguments, using this map2 on them will make them wait. It simply passes the `ExecutorService` on to both `Par` values, waits for the results of the Futures `af` and `bf`, applies `f` to them, and wraps them in a `UnitFuture`. In order to respect timeouts, we'd need a new `Future` implementation that records the amount of time spent evaluating `af`, then subtracts that time from the available time allocated for evaluating `bf`.
     }
+
+  // 加上超时的map2
+//  def map2WithTimeout[A,B,C](a: Par[A], b: Par[B])(f: (A,B) => C): Par[C] = {
+//    (es: ExecutorService) => {
+//      val af = a(es)
+//      val bf = b(es)
+//      UnitFuture(f(af.get, bf.get))
+//    }
   
   def fork[A](a: => Par[A]): Par[A] = // This is the simplest and most natural implementation of `fork`, but there are some problems with it--for one, the outer `Callable` will block waiting for the "inner" task to complete. Since this blocking occupies a thread in our thread pool, or whatever resource backs the `ExecutorService`, this implies that we're losing out on some potential parallelism. Essentially, we're using two threads when one should suffice. This is a symptom of a more serious problem with the implementation, and we will discuss this later in the chapter.
     es => es.submit(new Callable[A] { 
       def call = a(es).get
     })
 
+  def lazyUnit[A](a: => A): Par[A] = fork(unit(a))
+
+  // 7.4
+  def asyncF[A, B](f: A => B): A => Par[B] = {
+    (a: A) => fork(unit(f(a)))
+      // (a: A) => lazyUnit(f(a))
+  }
+
   def map[A,B](pa: Par[A])(f: A => B): Par[B] = 
     map2(pa, unit(()))((a,_) => f(a))
 
   def sortPar(parList: Par[List[Int]]) = map(parList)(_.sorted)
+
+  // 7.5
+  def sequence[A](ps: List[Par[A]]): Par[List[A]] = {
+    // 这里的方法是
+    // f(Par[A], Par[B]) => Par[C]
+    // f(a, b) => (a::b)
+    // 从而实现从 List[Par[A]] => Par[List[A]]的转变
+    ps.foldRight[Par[List[A]]](unit(List()))((h, t) => map2(h, t)(_ :: _))
+  }
+
+  def parMap[A, B](ps: List[A])(f: A => B): Par[List[B]] = {
+    sequence(ps.map(asyncF(f)))
+  }
+
+  // 7.6
+  def parFilter[A](as: List[A])(f: A => Boolean): Par[List[A]] = {
+    as.foldRight[Par[List[A]]](unit(List())) { (h, t) =>
+    if (f(h)) map2(h, t)(_ :: _)
+    else t
+    }
+  }
 
   def equal[A](e: ExecutorService)(p: Par[A], p2: Par[A]): Boolean = 
     p(e).get == p2(e).get
